@@ -24,10 +24,10 @@ type TestCredentials struct {
 // GetTestCredentials retrieves test credentials from environment variables
 // Returns nil if credentials are not available
 func GetTestCredentials() *TestCredentials {
-	clientID := os.Getenv("SPOTIPY_CLIENT_ID")
-	clientSecret := os.Getenv("SPOTIPY_CLIENT_SECRET")
-	redirectURI := os.Getenv("SPOTIPY_REDIRECT_URI")
-	username := os.Getenv("SPOTIPY_CLIENT_USERNAME")
+	clientID := os.Getenv("SPOTIGO_CLIENT_ID")
+	clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
+	redirectURI := os.Getenv("SPOTIGO_REDIRECT_URI")
+	username := os.Getenv("SPOTIGO_CLIENT_USERNAME")
 
 	if clientID == "" || clientSecret == "" {
 		return nil
@@ -44,7 +44,7 @@ func GetTestCredentials() *TestCredentials {
 // SkipIfNoCredentials skips the test if credentials are not available
 func SkipIfNoCredentials(t *testing.T) {
 	if GetTestCredentials() == nil {
-		t.Skip("Skipping test: SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET environment variables not set")
+		t.Skip("Skipping test: SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET environment variables not set")
 	}
 }
 

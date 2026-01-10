@@ -13,24 +13,24 @@ import (
 // token caching and error handling.
 //
 // Prerequisites:
-//   - Set SPOTIPY_CLIENT_ID environment variable
-//   - Set SPOTIPY_CLIENT_SECRET environment variable
-//   - Set SPOTIPY_REDIRECT_URI environment variable
+//   - Set SPOTIGO_CLIENT_ID environment variable
+//   - Set SPOTIGO_CLIENT_SECRET environment variable
+//   - Set SPOTIGO_REDIRECT_URI environment variable
 //   - Add redirect URI to your Spotify app settings
 //
 // Usage:
 //   go run examples/oauth_flow.go
 func main() {
-	clientID := os.Getenv("SPOTIPY_CLIENT_ID")
-	clientSecret := os.Getenv("SPOTIPY_CLIENT_SECRET")
-	redirectURI := os.Getenv("SPOTIPY_REDIRECT_URI")
+	clientID := os.Getenv("SPOTIGO_CLIENT_ID")
+	clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
+	redirectURI := os.Getenv("SPOTIGO_REDIRECT_URI")
 
 	if clientID == "" || clientSecret == "" {
-		log.Fatal("SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET must be set")
+		log.Fatal("SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET must be set")
 	}
 
 	if redirectURI == "" {
-		log.Fatal("SPOTIPY_REDIRECT_URI must be set")
+		log.Fatal("SPOTIGO_REDIRECT_URI must be set")
 	}
 
 	// Create OAuth manager with scopes

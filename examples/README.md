@@ -27,16 +27,16 @@ Before running the examples, you'll need:
 2. **Spotify App** - Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 3. **Environment Variables** - Set the following before running examples:
 
-   - `SPOTIPY_CLIENT_ID` - Your Spotify app client ID
-   - `SPOTIPY_CLIENT_SECRET` - Your Spotify app client secret
-   - `SPOTIPY_REDIRECT_URI` - OAuth redirect URI (required for OAuth examples, e.g., `http://localhost:8080/callback`)
-   - `SPOTIPY_CLIENT_USERNAME` - Username for token caching (optional)
+   - `SPOTIGO_CLIENT_ID` - Your Spotify app client ID
+   - `SPOTIGO_CLIENT_SECRET` - Your Spotify app client secret
+   - `SPOTIGO_REDIRECT_URI` - OAuth redirect URI (required for OAuth examples, e.g., `http://localhost:8080/callback`)
+   - `SPOTIGO_CLIENT_USERNAME` - Username for token caching (optional)
 
    Example:
    ```bash
-   export SPOTIPY_CLIENT_ID="your_client_id"
-   export SPOTIPY_CLIENT_SECRET="your_client_secret"
-   export SPOTIPY_REDIRECT_URI="http://localhost:8080/callback"
+   export SPOTIGO_CLIENT_ID="your_client_id"
+   export SPOTIGO_CLIENT_SECRET="your_client_secret"
+   export SPOTIGO_REDIRECT_URI="http://localhost:8080/callback"
    ```
 
 ## Note

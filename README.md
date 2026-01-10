@@ -38,9 +38,9 @@ Before using Spotigo, you'll need:
 
 Once you have your credentials, set them as environment variables:
 ```bash
-export SPOTIPY_CLIENT_ID="your_client_id"
-export SPOTIPY_CLIENT_SECRET="your_client_secret"
-export SPOTIPY_REDIRECT_URI="http://localhost:8080/callback"  # For OAuth flows
+export SPOTIGO_CLIENT_ID="your_client_id"
+export SPOTIGO_CLIENT_SECRET="your_client_secret"
+export SPOTIGO_REDIRECT_URI="http://localhost:8080/callback"  # For OAuth flows
 ```
 
 ## Quick Start
@@ -63,11 +63,11 @@ import (
 
 func main() {
 	// Get credentials from environment variables
-	clientID := os.Getenv("SPOTIPY_CLIENT_ID")
-	clientSecret := os.Getenv("SPOTIPY_CLIENT_SECRET")
+	clientID := os.Getenv("SPOTIGO_CLIENT_ID")
+	clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
 
 	if clientID == "" || clientSecret == "" {
-		log.Fatal("SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET must be set")
+		log.Fatal("SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET must be set")
 	}
 
 	// Create authentication manager
@@ -123,12 +123,12 @@ import (
 )
 
 func main() {
-	clientID := os.Getenv("SPOTIPY_CLIENT_ID")
-	clientSecret := os.Getenv("SPOTIPY_CLIENT_SECRET")
-	redirectURI := os.Getenv("SPOTIPY_REDIRECT_URI")
+	clientID := os.Getenv("SPOTIGO_CLIENT_ID")
+	clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
+	redirectURI := os.Getenv("SPOTIGO_REDIRECT_URI")
 
 	if clientID == "" || clientSecret == "" {
-		log.Fatal("SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET must be set")
+		log.Fatal("SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET must be set")
 	}
 
 	// Create OAuth manager with required scopes
@@ -236,10 +236,10 @@ client, err := spotigo.NewClient(auth)
 
 Spotigo supports environment variables for configuration:
 
-- `SPOTIPY_CLIENT_ID` - Your Spotify app client ID
-- `SPOTIPY_CLIENT_SECRET` - Your Spotify app client secret
-- `SPOTIPY_REDIRECT_URI` - OAuth redirect URI
-- `SPOTIPY_CLIENT_USERNAME` - Username for token caching
+- `SPOTIGO_CLIENT_ID` - Your Spotify app client ID
+- `SPOTIGO_CLIENT_SECRET` - Your Spotify app client secret
+- `SPOTIGO_REDIRECT_URI` - OAuth redirect URI
+- `SPOTIGO_CLIENT_USERNAME` - Username for token caching
 
 ## Client Configuration
 
@@ -571,7 +571,7 @@ If you're seeing "incorrect user" errors:
 
 - Clear the token cache file
 - Use `show_dialog=true` in OAuth flow to force re-authentication
-- Check that `SPOTIPY_CLIENT_USERNAME` matches your Spotify username
+- Check that `SPOTIGO_CLIENT_USERNAME` matches your Spotify username
 
 ### Search Not Finding Tracks
 

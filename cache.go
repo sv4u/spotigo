@@ -37,7 +37,7 @@ type FileCacheHandler struct {
 
 const (
 	// EnvCachePath is the environment variable for custom cache path
-	EnvCachePath = "SPOTIPY_CACHE_PATH"
+	EnvCachePath = "SPOTIGO_CACHE_PATH"
 	// DefaultCacheFilename is the default cache filename
 	DefaultCacheFilename = ".cache"
 )

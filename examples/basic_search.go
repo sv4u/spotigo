@@ -13,18 +13,18 @@ import (
 // using the Client Credentials OAuth2 flow.
 //
 // Prerequisites:
-//   - Set SPOTIPY_CLIENT_ID environment variable
-//   - Set SPOTIPY_CLIENT_SECRET environment variable
+//   - Set SPOTIGO_CLIENT_ID environment variable
+//   - Set SPOTIGO_CLIENT_SECRET environment variable
 //
 // Usage:
 //   go run examples/basic_search.go
 func main() {
 	// Get credentials from environment variables
-	clientID := os.Getenv("SPOTIPY_CLIENT_ID")
-	clientSecret := os.Getenv("SPOTIPY_CLIENT_SECRET")
+	clientID := os.Getenv("SPOTIGO_CLIENT_ID")
+	clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
 
 	if clientID == "" || clientSecret == "" {
-		log.Fatal("SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET must be set")
+		log.Fatal("SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET must be set")
 	}
 
 	// Create authentication manager using Client Credentials flow

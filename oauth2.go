@@ -31,10 +31,10 @@ const (
 
 // Environment variable names for OAuth credentials
 const (
-	EnvClientID     = "SPOTIPY_CLIENT_ID"
-	EnvClientSecret = "SPOTIPY_CLIENT_SECRET"
-	EnvRedirectURI  = "SPOTIPY_REDIRECT_URI"
-	EnvUsername     = "SPOTIPY_CLIENT_USERNAME"
+	EnvClientID     = "SPOTIGO_CLIENT_ID"
+	EnvClientSecret = "SPOTIGO_CLIENT_SECRET"
+	EnvRedirectURI  = "SPOTIGO_REDIRECT_URI"
+	EnvUsername     = "SPOTIGO_CLIENT_USERNAME"
 )
 
 // AuthManager defines the interface for authentication managers.
