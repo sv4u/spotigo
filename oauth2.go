@@ -385,49 +385,124 @@ func (c *ClientCredentials) GetAccessToken(ctx context.Context) (string, error) 
 		return c.TokenInfo.AccessToken, nil
 	}
 
-	// Request new token
-	data := url.Values{}
-	data.Set("grant_type", "client_credentials")
+	// Request new token with retry logic for transient network errors
+	const maxRetries = 3
+	var lastErr error
 
-	req, err := http.NewRequestWithContext(ctx, "POST", TokenURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Check context cancellation before retry attempt
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("request cancelled: %w", ctx.Err())
+		default:
+		}
+
+		// Request new token
+		data := url.Values{}
+		data.Set("grant_type", "client_credentials")
+
+		req, err := http.NewRequestWithContext(ctx, "POST", TokenURL, strings.NewReader(data.Encode()))
+		if err != nil {
+			return "", fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Authorization", c.GetAuthHeader())
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to execute request: %w", err)
+			// Retry on network errors (transient connection issues)
+			if attempt < maxRetries && isTransientNetworkError(err) {
+				// Exponential backoff: 100ms, 200ms, 400ms
+				backoff := time.Duration(100*(1<<uint(attempt))) * time.Millisecond
+				select {
+				case <-ctx.Done():
+					return "", fmt.Errorf("request cancelled: %w", ctx.Err())
+				case <-time.After(backoff):
+					continue
+				}
+			}
+			return "", lastErr
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to read response: %w", err)
+			// Retry on read errors
+			if attempt < maxRetries {
+				backoff := time.Duration(100*(1<<uint(attempt))) * time.Millisecond
+				select {
+				case <-ctx.Done():
+					return "", fmt.Errorf("request cancelled: %w", ctx.Err())
+				case <-time.After(backoff):
+					continue
+				}
+			}
+			return "", lastErr
+		}
+
+		// Handle HTTP errors
+		if resp.StatusCode >= 400 {
+			// Retry on server errors (5xx) but not client errors (4xx)
+			if resp.StatusCode >= 500 && attempt < maxRetries {
+				lastErr = HandleOAuthError(fmt.Errorf("HTTP %d", resp.StatusCode), body)
+				backoff := time.Duration(100*(1<<uint(attempt))) * time.Millisecond
+				select {
+				case <-ctx.Done():
+					return "", fmt.Errorf("request cancelled: %w", ctx.Err())
+				case <-time.After(backoff):
+					continue
+				}
+			}
+			return "", HandleOAuthError(fmt.Errorf("HTTP %d", resp.StatusCode), body)
+		}
+
+		// Parse token response
+		tokenInfo, err := c.ParseTokenResponse(body)
+		if err != nil {
+			return "", err
+		}
+
+		// Store token
+		c.TokenInfo = tokenInfo
+
+		// Save to cache if cache handler is set
+		if c.CacheHandler != nil {
+			_ = c.CacheHandler.SaveTokenToCache(ctx, tokenInfo) // Ignore cache errors
+		}
+
+		return tokenInfo.AccessToken, nil
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Authorization", c.GetAuthHeader())
+	return "", fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
+}
 
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute request: %w", err)
+// isTransientNetworkError checks if an error is a transient network error that should be retried
+func isTransientNetworkError(err error) bool {
+	if err == nil {
+		return false
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+	errStr := err.Error()
+	// Check for common transient network errors
+	transientErrors := []string{
+		"connection reset",
+		"connection terminated",
+		"upstream connect error",
+		"disconnect/reset before headers",
+		"EOF",
+		"broken pipe",
+		"timeout",
+		"temporary failure",
+		"no such host",
 	}
-
-	// Handle errors
-	if resp.StatusCode >= 400 {
-		return "", HandleOAuthError(fmt.Errorf("HTTP %d", resp.StatusCode), body)
+	for _, transientErr := range transientErrors {
+		if strings.Contains(strings.ToLower(errStr), strings.ToLower(transientErr)) {
+			return true
+		}
 	}
-
-	// Parse token response
-	tokenInfo, err := c.ParseTokenResponse(body)
-	if err != nil {
-		return "", err
-	}
-
-	// Store token
-	c.TokenInfo = tokenInfo
-
-	// Save to cache if cache handler is set
-	if c.CacheHandler != nil {
-		_ = c.CacheHandler.SaveTokenToCache(ctx, tokenInfo) // Ignore cache errors
-	}
-
-	return tokenInfo.AccessToken, nil
+	return false
 }
 
 // GetCachedToken returns the cached token info
