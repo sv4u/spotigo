@@ -10,7 +10,7 @@ coverage:
   round: nearest
   
   # Range: coverage range to display (e.g., "70...100")
-  range: "20...100"
+  range: "70...100"
   
   # Status settings for coverage checks
   status:
@@ -18,26 +18,27 @@ coverage:
     project:
       default:
         # Target coverage percentage for the entire project
-        target: 20
+        # Project aims for >80% coverage per CONTRIBUTING.md
+        target: 80
         # Threshold: minimum coverage change allowed (percentage points)
-        threshold: 1
+        threshold: "1.0"
         # Base: base branch for comparison (auto, or branch name)
         base: auto
         # Flags: which flags to include in status check
-        flags: null
+        flags: []
         # Paths: which paths to include in status check
-        paths: null
+        paths: []
         # If true, only report status if coverage decreases
         only_pulls: false
     
     # Patch status: coverage for the patch/diff
     patch:
       default:
-        target: 20
-        threshold: 1
+        target: 80
+        threshold: "1.0"
         base: auto
-        flags: null
-        paths: null
+        flags: []
+        paths: []
         only_pulls: false
     
     # Changes status: coverage changes in the PR
@@ -51,7 +52,7 @@ coverage:
         # Only notify on coverage changes
         only_pulls: false
         # Minimum coverage threshold for notifications
-        threshold: 20
+        threshold: 80
 
 # Comment settings for pull requests
 comment:
@@ -69,11 +70,16 @@ comment:
 # Flags configuration
 # Flags allow you to group coverage reports by test type or component
 flags:
-  unittests:
-    # Paths: which paths this flag applies to
+  unit:
+    # Paths: which paths this flag applies to (unit tests)
     paths:
-      - internal/
-      - cmd/
+      - tests/unit/
+    # Carryforward: if true, carry forward coverage from previous commits
+    carryforward: false
+  integration:
+    # Paths: which paths this flag applies to (integration tests)
+    paths:
+      - tests/integration/
     # Carryforward: if true, carry forward coverage from previous commits
     carryforward: false
 
@@ -81,10 +87,10 @@ flags:
 # Files or paths to completely ignore
 ignore:
   - "**/*_test.go"
-  - "**/*.pb.go"
-  - "**/vendor/"
+  - "**/tests/"
   - "**/examples/"
-  - "**/cmd/touchlog/main.go"
+  - "**/vendor/"
+  - "**/*.pb.go"
 
 # GitHub integration settings
 github_checks:
@@ -102,19 +108,6 @@ parsers:
       method: false
 
 # Fixes: specify how to fix coverage paths
-fixes:
-  - "internal/::internal/"
-  - "cmd/::cmd/"
-
-# Flags for different test types (if you add more test types later)
-# Example:
-# flags:
-#   integration:
-#     paths:
-#       - internal/
-#     carryforward: false
-#   e2e:
-#     paths:
-#       - cmd/
-#     carryforward: false
+# Not needed for this project's flat structure
+# fixes: []
 
