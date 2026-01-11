@@ -1,15 +1,135 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - hotfix
+      dry_run:
+        description: 'Dry run mode (skip tag and release creation)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
+  calculate-version:
+    name: Calculate Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.calculate.outputs.version }}
+      previous_tag: ${{ steps.calculate.outputs.previous_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Calculate next version
+        id: calculate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const bumpType = '${{ inputs.version_bump }}';
+            
+            // Helper function to retry API calls with exponential backoff
+            async function retryWithBackoff(fn, maxRetries = 3) {
+              for (let i = 0; i < maxRetries; i++) {
+                try {
+                  return await fn();
+                } catch (error) {
+                  if (error.status === 403 && error.message.includes('rate limit') && i < maxRetries - 1) {
+                    const delay = Math.pow(2, i) * 1000;
+                    console.log(`Rate limited, retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                  }
+                  throw error;
+                }
+              }
+            }
+            
+            // Get all tags
+            const tags = await retryWithBackoff(async () => {
+              return await github.rest.repos.listTags({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+              });
+            });
+            
+            // Find latest semantic version tag
+            const semverTags = tags.data
+              .map(t => t.name)
+              .filter(tag => /^v\d+\.\d+\.\d+$/.test(tag))
+              .sort((a, b) => {
+                const aParts = a.replace(/^v/, '').split('.').map(Number);
+                const bParts = b.replace(/^v/, '').split('.').map(Number);
+                for (let i = 0; i < 3; i++) {
+                  if (aParts[i] !== bParts[i]) {
+                    return bParts[i] - aParts[i];
+                  }
+                }
+                return 0;
+              });
+            
+            let latestTag = semverTags.length > 0 ? semverTags[0] : null;
+            let previousTag = semverTags.length > 1 ? semverTags[1] : null;
+            
+            // Calculate next version
+            let nextVersion;
+            if (!latestTag) {
+              nextVersion = 'v0.0.1';
+              console.log('No existing tags found, starting at v0.0.1');
+            } else {
+              const version = latestTag.replace(/^v/, '').split('.').map(Number);
+              const [major, minor, patch] = version;
+              
+              switch (bumpType) {
+                case 'major':
+                  nextVersion = `v${major + 1}.0.0`;
+                  break;
+                case 'minor':
+                  nextVersion = `v${major}.${minor + 1}.0`;
+                  break;
+                case 'hotfix':
+                  nextVersion = `v${major}.${minor}.${patch + 1}`;
+                  break;
+                default:
+                  throw new Error(`Invalid bump type: ${bumpType}`);
+              }
+              
+              console.log(`Latest tag: ${latestTag}`);
+              console.log(`Bump type: ${bumpType}`);
+              console.log(`Next version: ${nextVersion}`);
+            }
+            
+            // Validate semantic versioning format
+            if (!/^v\d+\.\d+\.\d+$/.test(nextVersion)) {
+              throw new Error(`Invalid version format: ${nextVersion}`);
+            }
+            
+            // Set outputs
+            core.setOutput('version', nextVersion);
+            core.setOutput('previous_tag', previousTag || '');
+            console.log(`Calculated version: ${nextVersion}`);
+            if (previousTag) {
+              console.log(`Previous tag: ${previousTag}`);
+            } else {
+              console.log('No previous tag (first release)');
+            }
+
   test:
     name: Run Tests
+    needs: [calculate-version]
     uses: ./.github/workflows/test.yml
     with:
-      go-version: '1.24'  # Use latest stable or specific version
+      go-version: '1.24'
       run-integration-tests: true
     secrets: inherit
     permissions:
@@ -20,6 +140,8 @@ jobs:
     name: Generate SBOM
     needs: [test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -67,19 +189,23 @@ jobs:
             grep -q '{' sbom.cyclonedx.json || (echo "Invalid JSON: sbom.cyclonedx.json" && exit 1)
           fi
           echo "Both SBOM files are valid JSON"
-      - name: Upload SBOM files to release
-        uses: softprops/action-gh-release@v2
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: |
-            sbom.cyclonedx.json
+          name: sbom-files
+          path: |
             sbom.spdx.json
-          fail_on_unmatched_files: true
+            sbom.cyclonedx.json
+          retention-days: 7
 
   changelog:
     name: Generate Changelog
-    needs: [test]
+    needs: [test, calculate-version]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changelog_path: ${{ steps.generate.outputs.changelog_path }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,10 +214,14 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Generate changelog
+        id: generate
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const currentTag = '${{ needs.calculate-version.outputs.version }}';
+            const previousTag = '${{ needs.calculate-version.outputs.previous_tag }}';
+            const releaseDate = new Date().toISOString().split('T')[0];
             
             // Helper function to retry API calls with exponential backoff
             async function retryWithBackoff(fn, maxRetries = 3) {
@@ -177,48 +307,23 @@ jobs:
               return changelog;
             }
             
-            // Main execution
-            const currentTag = context.payload.release.tag_name;
-            const releaseDate = new Date(context.payload.release.published_at || new Date()).toISOString().split('T')[0];
-            
-            // Get all tags
-            const tags = await retryWithBackoff(async () => {
-              return await github.rest.repos.listTags({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                per_page: 100
-              });
-            });
-            
-            // Find previous tag (semver comparison)
-            const tagNames = tags.data.map(t => t.name).sort((a, b) => {
-              const aParts = a.replace(/^v/, '').split('.').map(Number);
-              const bParts = b.replace(/^v/, '').split('.').map(Number);
-              for (let i = 0; i < 3; i++) {
-                if (aParts[i] !== bParts[i]) {
-                  return bParts[i] - aParts[i];
-                }
-              }
-              return 0;
-            });
-            
-            const currentIndex = tagNames.indexOf(currentTag);
-            const previousTag = currentIndex > 0 ? tagNames[currentIndex - 1] : null;
-            
             // Get commits
             let commits = [];
-            if (previousTag) {
+            if (previousTag && previousTag !== '') {
+              // Compare from previous tag to current HEAD
               const comparison = await retryWithBackoff(async () => {
                 return await github.rest.repos.compareCommits({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   base: previousTag,
-                  head: currentTag
+                  head: context.sha
                 });
               });
               commits = comparison.data.commits;
+              console.log(`Comparing ${previousTag}..${context.sha}`);
             } else {
               // First release - get all commits (paginated)
+              console.log('First release - getting all commits');
               let page = 1;
               let hasMore = true;
               while (hasMore) {
@@ -259,46 +364,85 @@ jobs:
             Object.keys(grouped).forEach(type => {
               console.log(`  ${type}: ${grouped[type].length}`);
             });
-      - name: Update release notes
-        uses: actions/github-script@v7
+            
+            core.setOutput('changelog_path', 'CHANGELOG.md');
+      - name: Upload changelog artifact
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: context.payload.release.id,
-              body: changelog
-            });
+          name: changelog
+          path: CHANGELOG.md
+          retention-days: 7
 
-  publish:
-    name: Verify Release
-    needs: [sbom, changelog]
+  dry-run-summary:
+    name: Dry Run Summary
+    needs: [calculate-version, sbom, changelog]
+    if: inputs.dry_run == true
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download changelog artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: .
+      - name: Display summary
+        run: |
+          echo "## Dry Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.calculate-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Previous Tag:** ${{ needs.calculate-version.outputs.previous_tag || 'None (first release)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Bump Type:** ${{ inputs.version_bump }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### What would be created:" >> $GITHUB_STEP_SUMMARY
+          echo "- Git tag: ${{ needs.calculate-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- GitHub Release: ${{ needs.calculate-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SBOM files: sbom.spdx.json, sbom.cyclonedx.json" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changelog Preview:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          head -20 CHANGELOG.md >> $GITHUB_STEP_SUMMARY || echo "Changelog preview unavailable" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** No tag or release was created (dry-run mode)" >> $GITHUB_STEP_SUMMARY
+
+  create-release:
+    name: Create Release
+    needs: [calculate-version, sbom, changelog]
+    if: inputs.dry_run == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@v4
         with:
-          go-version-file: 'go.mod'
-      - name: Verify go.mod
-        run: go mod verify
-      - name: Verify tag format
+          name: sbom-files
+          path: ./sbom
+      - name: Download changelog artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: .
+      - name: Create Git tag
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "Error: Tag $TAG does not match semver format (vX.Y.Z)"
-            exit 1
-          fi
-      - name: Verify tag exists
-        run: |
-          git fetch --tags
-          if ! git rev-parse "${{ github.event.release.tag_name }}" >/dev/null 2>&1; then
-            echo "Error: Tag ${{ github.event.release.tag_name }} not found"
-            exit 1
-          fi
-          echo "Tag verified: ${{ github.event.release.tag_name }}"
-      - name: Verify module
-        run: go mod tidy && git diff --exit-code go.mod go.sum
+          VERSION="${{ needs.calculate-version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.calculate-version.outputs.version }}
+          name: ${{ needs.calculate-version.outputs.version }}
+          body_path: CHANGELOG.md
+          files: |
+            sbom/sbom.spdx.json
+            sbom/sbom.cyclonedx.json
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
