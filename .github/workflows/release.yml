@@ -144,35 +144,20 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-      - name: Install syft
-        run: go install github.com/anchore/syft/cmd/syft@v1.5.0
       - name: Generate SPDX SBOM
-        run: |
-          syft packages dir:. -o spdx-json -o file=sbom.spdx.json
-          if [ ! -f sbom.spdx.json ]; then
-            echo "Error: SPDX SBOM file not generated"
-            exit 1
-          fi
-          if [ ! -s sbom.spdx.json ]; then
-            echo "Error: SPDX SBOM file is empty"
-            exit 1
-          fi
-          echo "SPDX SBOM generated: $(wc -c < sbom.spdx.json) bytes"
+        uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+          syft-version: v1.5.0
       - name: Generate CycloneDX SBOM
-        run: |
-          syft packages dir:. -o cyclonedx-json -o file=sbom.cyclonedx.json
-          if [ ! -f sbom.cyclonedx.json ]; then
-            echo "Error: CycloneDX SBOM file not generated"
-            exit 1
-          fi
-          if [ ! -s sbom.cyclonedx.json ]; then
-            echo "Error: CycloneDX SBOM file is empty"
-            exit 1
-          fi
-          echo "CycloneDX SBOM generated: $(wc -c < sbom.cyclonedx.json) bytes"
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          upload-artifact: false
+          syft-version: v1.5.0
       - name: Validate SBOM files
         run: |
           # Validate JSON syntax using python3 or jq as fallback
@@ -189,6 +174,8 @@ jobs:
             grep -q '{' sbom.cyclonedx.json || (echo "Invalid JSON: sbom.cyclonedx.json" && exit 1)
           fi
           echo "Both SBOM files are valid JSON"
+          echo "SPDX SBOM generated: $(wc -c < sbom.spdx.json) bytes"
+          echo "CycloneDX SBOM generated: $(wc -c < sbom.cyclonedx.json) bytes"
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@v4
         with:
