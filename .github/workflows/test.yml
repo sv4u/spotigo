@@ -92,7 +92,7 @@ jobs:
           name: coverage-integration-${{ inputs.go-version }}
           path: .
       - name: Install gocovmerge
-        run: go install github.com/wadey/gocovmerge@v1.2.0
+        run: go install github.com/wadey/gocovmerge@latest
       - name: Merge coverage reports
         run: |
           if [ -f coverage-integration.out ] && [ -s coverage-integration.out ]; then
