@@ -22,14 +22,38 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-      - name: Generate CycloneDX SBOM
-        run: |
-          go install github.com/CycloneDX/cyclonedx-gomod@latest
-          cyclonedx-gomod mod -licenses -output sbom.cyclonedx.json
+      - name: Install syft
+        run: go install github.com/anchore/syft/cmd/syft@latest
       - name: Generate SPDX SBOM
         run: |
-          go install github.com/anchore/syft/cmd/syft@latest
           syft packages dir:. -o spdx-json -o file=sbom.spdx.json
+          if [ ! -f sbom.spdx.json ]; then
+            echo "Error: SPDX SBOM file not generated"
+            exit 1
+          fi
+          if [ ! -s sbom.spdx.json ]; then
+            echo "Error: SPDX SBOM file is empty"
+            exit 1
+          fi
+          echo "SPDX SBOM generated: $(wc -c < sbom.spdx.json) bytes"
+      - name: Generate CycloneDX SBOM
+        run: |
+          syft packages dir:. -o cyclonedx-json -o file=sbom.cyclonedx.json
+          if [ ! -f sbom.cyclonedx.json ]; then
+            echo "Error: CycloneDX SBOM file not generated"
+            exit 1
+          fi
+          if [ ! -s sbom.cyclonedx.json ]; then
+            echo "Error: CycloneDX SBOM file is empty"
+            exit 1
+          fi
+          echo "CycloneDX SBOM generated: $(wc -c < sbom.cyclonedx.json) bytes"
+      - name: Validate SBOM files
+        run: |
+          # Validate JSON syntax
+          python3 -m json.tool sbom.spdx.json > /dev/null || (echo "Invalid JSON: sbom.spdx.json" && exit 1)
+          python3 -m json.tool sbom.cyclonedx.json > /dev/null || (echo "Invalid JSON: sbom.cyclonedx.json" && exit 1)
+          echo "Both SBOM files are valid JSON"
       - name: Upload CycloneDX SBOM
         uses: actions/upload-release-asset@v1
         with:
@@ -56,10 +80,178 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-      - name: Install git-chglog
-        run: go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest
       - name: Generate changelog
-        run: git-chglog -o CHANGELOG.md ${{ github.event.release.tag_name }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Helper function to retry API calls with exponential backoff
+            async function retryWithBackoff(fn, maxRetries = 3) {
+              for (let i = 0; i < maxRetries; i++) {
+                try {
+                  return await fn();
+                } catch (error) {
+                  if (error.status === 403 && error.message.includes('rate limit') && i < maxRetries - 1) {
+                    const delay = Math.pow(2, i) * 1000; // 1s, 2s, 4s
+                    console.log(`Rate limited, retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                  }
+                  throw error;
+                }
+              }
+            }
+            
+            // Parse conventional commit message
+            function parseCommit(commit) {
+              const message = commit.commit.message.split('\n')[0]; // First line only
+              const match = message.match(/^(\w+)(?:\(([^)]+)\))?:\s*(.+)$/);
+              if (!match) return null;
+              
+              return {
+                type: match[1],
+                scope: match[2] || '',
+                message: match[3],
+                author: commit.author?.login || commit.commit.author.name,
+                sha: commit.sha.substring(0, 7)
+              };
+            }
+            
+            // Group commits by type
+            function groupByType(commits) {
+              const groups = {};
+              const typeLabels = {
+                feat: 'Features',
+                fix: 'Bug Fixes',
+                docs: 'Documentation',
+                style: 'Code Style',
+                refactor: 'Refactoring',
+                perf: 'Performance',
+                test: 'Tests',
+                chore: 'Chores',
+                build: 'Build System',
+                ci: 'CI/CD'
+              };
+              
+              commits.forEach(commit => {
+                const label = typeLabels[commit.type] || 'Other';
+                if (!groups[label]) groups[label] = [];
+                groups[label].push(commit);
+              });
+              
+              return groups;
+            }
+            
+            // Format as markdown
+            function formatChangelog(groups, tag, date) {
+              let changelog = `# Changelog\n\n## ${tag} (${date})\n\n`;
+              
+              const order = ['Features', 'Bug Fixes', 'Documentation', 'Refactoring', 
+                             'Performance', 'Tests', 'Build System', 'CI/CD', 'Code Style', 'Chores', 'Other'];
+              
+              let hasContent = false;
+              order.forEach(label => {
+                if (groups[label] && groups[label].length > 0) {
+                  hasContent = true;
+                  changelog += `### ${label}\n\n`;
+                  groups[label].forEach(commit => {
+                    const author = commit.author.startsWith('@') ? commit.author : `@${commit.author}`;
+                    changelog += `- ${commit.message} (${author})\n`;
+                  });
+                  changelog += '\n';
+                }
+              });
+              
+              if (!hasContent) {
+                changelog += '_No changes in this release._\n';
+              }
+              
+              return changelog;
+            }
+            
+            // Main execution
+            const currentTag = context.payload.release.tag_name;
+            const releaseDate = new Date(context.payload.release.published_at || new Date()).toISOString().split('T')[0];
+            
+            // Get all tags
+            const tags = await retryWithBackoff(async () => {
+              return await github.rest.repos.listTags({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+              });
+            });
+            
+            // Find previous tag (semver comparison)
+            const tagNames = tags.data.map(t => t.name).sort((a, b) => {
+              const aParts = a.replace(/^v/, '').split('.').map(Number);
+              const bParts = b.replace(/^v/, '').split('.').map(Number);
+              for (let i = 0; i < 3; i++) {
+                if (aParts[i] !== bParts[i]) {
+                  return bParts[i] - aParts[i];
+                }
+              }
+              return 0;
+            });
+            
+            const currentIndex = tagNames.indexOf(currentTag);
+            const previousTag = currentIndex > 0 ? tagNames[currentIndex - 1] : null;
+            
+            // Get commits
+            let commits = [];
+            if (previousTag) {
+              const comparison = await retryWithBackoff(async () => {
+                return await github.rest.repos.compareCommits({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  base: previousTag,
+                  head: currentTag
+                });
+              });
+              commits = comparison.data.commits;
+            } else {
+              // First release - get all commits (paginated)
+              let page = 1;
+              let hasMore = true;
+              while (hasMore) {
+                const response = await retryWithBackoff(async () => {
+                  return await github.rest.repos.listCommits({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    per_page: 100,
+                    page: page
+                  });
+                });
+                commits.push(...response.data);
+                hasMore = response.data.length === 100;
+                page++;
+              }
+            }
+            
+            // Parse and filter conventional commits
+            const parsed = commits.map(parseCommit).filter(c => c !== null);
+            const skipped = commits.length - parsed.length;
+            
+            if (skipped > 0) {
+              console.log(`Skipped ${skipped} non-conventional commits`);
+            }
+            
+            // Group and format
+            const grouped = groupByType(parsed);
+            const changelog = formatChangelog(grouped, currentTag, releaseDate);
+            
+            // Write file
+            fs.writeFileSync('CHANGELOG.md', changelog);
+            
+            // Log summary
+            console.log(`Generated changelog for ${currentTag}`);
+            console.log(`Total commits: ${commits.length}`);
+            console.log(`Conventional commits: ${parsed.length}`);
+            console.log(`Skipped: ${skipped}`);
+            Object.keys(grouped).forEach(type => {
+              console.log(`  ${type}: ${grouped[type].length}`);
+            });
       - name: Update release notes
         uses: actions/github-script@v7
         with:
@@ -75,7 +267,7 @@ jobs:
 
   publish:
     name: Verify Release
-    needs: [test, sbom, changelog]
+    needs: [sbom, changelog]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
