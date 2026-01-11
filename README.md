@@ -1,6 +1,6 @@
 # Spotigo
 
-[![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.24+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![codecov](https://codecov.io/gh/sv4u/spotigo/branch/main/graph/badge.svg)](https://codecov.io/gh/sv4u/spotigo)
 [![CI](https://github.com/sv4u/spotigo/workflows/CI/badge.svg)](https://github.com/sv4u/spotigo/actions/workflows/ci.yml)
@@ -26,13 +26,13 @@ Spotigo is a Go client library for the Spotify Web API, providing full access to
 go get github.com/sv4u/spotigo
 ```
 
-Requires Go 1.23 or later.
+Requires Go 1.24 or later.
 
 ## Prerequisites
 
 Before using Spotigo, you'll need:
 
-1. **Go 1.23 or later** - Download from [golang.org](https://golang.org/dl/)
+1. **Go 1.24 or later** - Download from [golang.org](https://golang.org/dl/)
 2. **Spotify Developer Account** - Sign up at [developer.spotify.com](https://developer.spotify.com/)
 3. **Spotify App** - Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) to get:
    - Client ID

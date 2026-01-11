@@ -9,7 +9,7 @@ jobs:
     name: Run Tests
     uses: ./.github/workflows/test.yml
     with:
-      go-version: '1.23'  # Use latest stable or specific version
+      go-version: '1.24'  # Use latest stable or specific version
       run-integration-tests: true
     secrets: inherit
 

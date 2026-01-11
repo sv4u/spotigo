@@ -6,14 +6,6 @@ on:
     branches: [main]
 
 jobs:
-  test-go-123:
-    name: Test Go 1.23
-    uses: ./.github/workflows/test.yml
-    with:
-      go-version: '1.23'
-      run-integration-tests: true
-    secrets: inherit
-
   test-go-124:
     name: Test Go 1.24
     uses: ./.github/workflows/test.yml
