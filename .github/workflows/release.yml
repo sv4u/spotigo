@@ -133,7 +133,7 @@ jobs:
       run-integration-tests: true
     secrets: inherit
     permissions:
-      pull-requests: none
+      pull-requests: write
       contents: read
 
   sbom:
