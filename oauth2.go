@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -97,6 +98,37 @@ func ensureValue(value, envKey, envVar string) (string, error) {
 	}
 }
 
+// newHTTPClient creates a properly configured HTTP client with explicit transport settings
+// This ensures consistent behavior across Go versions, especially for OAuth token requests
+// The explicit configuration helps avoid issues with default HTTP client behavior changes between Go versions
+func newHTTPClient(timeout time.Duration) *http.Client {
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		DisableKeepAlives:   false,
+		// Explicitly configure connection timeouts with sufficient time for TLS handshake
+		DialContext: (&net.Dialer{
+			Timeout:   15 * time.Second, // Increased from default to allow for TLS handshake
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		// Configure TLS handshake timeout explicitly
+		TLSHandshakeTimeout: 10 * time.Second,
+		// Ensure response headers timeout is set
+		ResponseHeaderTimeout: 10 * time.Second,
+		// HTTP/2 is enabled by default for HTTPS, which is fine
+		// The explicit timeouts above help prevent connection resets
+	}
+
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
+}
+
 // NewSpotifyAuthBase creates a new base auth manager with environment variable fallback
 func NewSpotifyAuthBase(clientID, clientSecret, redirectURI, scope string) (*SpotifyAuthBase, error) {
 	// Ensure required values (with environment variable fallback)
@@ -118,7 +150,7 @@ func NewSpotifyAuthBase(clientID, clientSecret, redirectURI, scope string) (*Spo
 		ClientID:        clientID,
 		ClientSecret:    clientSecret,
 		RedirectURI:     redirectURI,
-		HTTPClient:      &http.Client{Timeout: 5 * time.Second},
+		HTTPClient:      newHTTPClient(5 * time.Second),
 		RequestsTimeout: 5 * time.Second,
 	}
 
@@ -327,7 +359,7 @@ func NewClientCredentials(clientID, clientSecret string) (*ClientCredentials, er
 		ClientID:        clientID,
 		ClientSecret:    clientSecret,
 		RedirectURI:     "", // Not needed for Client Credentials
-		HTTPClient:      &http.Client{Timeout: 5 * time.Second},
+		HTTPClient:      newHTTPClient(5 * time.Second),
 		RequestsTimeout: 5 * time.Second,
 	}
 
@@ -856,7 +888,7 @@ func NewSpotifyPKCE(clientID, redirectURI, scope string) (*SpotifyPKCE, error) {
 		ClientID:        clientID,
 		ClientSecret:    "", // PKCE doesn't use client secret
 		RedirectURI:     redirectURI,
-		HTTPClient:      &http.Client{Timeout: 5 * time.Second},
+		HTTPClient:      newHTTPClient(5 * time.Second),
 		RequestsTimeout: 5 * time.Second,
 	}
 
@@ -1295,7 +1327,7 @@ func NewSpotifyImplicitGrant(clientID, redirectURI, scope string) (*SpotifyImpli
 		ClientID:        clientID,
 		ClientSecret:    "", // Implicit Grant doesn't use client secret
 		RedirectURI:     redirectURI,
-		HTTPClient:      &http.Client{Timeout: 5 * time.Second},
+		HTTPClient:      newHTTPClient(5 * time.Second),
 		RequestsTimeout: 5 * time.Second,
 	}
 
