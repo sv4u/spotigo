@@ -1,12 +1,15 @@
 package tests
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,9 +24,85 @@ type TestCredentials struct {
 	Username     string
 }
 
+// loadEnvFile loads environment variables from a .env file
+// It looks for .env in the project root (where go.mod is located)
+func loadEnvFile() error {
+	// Find project root by looking for go.mod
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	// Walk up the directory tree to find go.mod
+	dir := wd
+	for {
+		envPath := filepath.Join(dir, ".env")
+		if _, err := os.Stat(envPath); err == nil {
+			// Found .env file, load it
+			return parseEnvFile(envPath)
+		}
+
+		// Check if we're at the root
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	// .env file not found, that's okay
+	return nil
+}
+
+// parseEnvFile parses a .env file and sets environment variables
+func parseEnvFile(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Parse KEY=value format
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Remove quotes if present
+		if len(value) >= 2 {
+			if (strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`)) ||
+				(strings.HasPrefix(value, `'`) && strings.HasSuffix(value, `'`)) {
+				value = value[1 : len(value)-1]
+			}
+		}
+
+		// Only set if not already set in environment (env vars take precedence)
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
+
+	return scanner.Err()
+}
+
 // GetTestCredentials retrieves test credentials from environment variables
+// It first tries to load from a .env file, then falls back to environment variables
 // Returns nil if credentials are not available
 func GetTestCredentials() *TestCredentials {
+	// Try to load .env file (silently fails if not found)
+	_ = loadEnvFile()
+
 	clientID := os.Getenv("SPOTIGO_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
 	redirectURI := os.Getenv("SPOTIGO_REDIRECT_URI")

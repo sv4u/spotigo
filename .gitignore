@@ -38,3 +38,8 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
