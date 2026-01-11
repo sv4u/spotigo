@@ -6,17 +6,26 @@ on:
     branches: [main]
 
 jobs:
-  test-matrix:
-    name: Test Go ${{ matrix.go-version }}
-    strategy:
-      matrix:
-        go-version:
-          - '1.23'
-          - '1.24'
-          - '1.25'
-        fail-fast: false  # Continue testing other versions if one fails
+  test-go-123:
+    name: Test Go 1.23
     uses: ./.github/workflows/test.yml
     with:
-      go-version: ${{ matrix.go-version }}
+      go-version: '1.23'
+      run-integration-tests: true
+    secrets: inherit
+
+  test-go-124:
+    name: Test Go 1.24
+    uses: ./.github/workflows/test.yml
+    with:
+      go-version: '1.24'
+      run-integration-tests: true
+    secrets: inherit
+
+  test-go-125:
+    name: Test Go 1.25
+    uses: ./.github/workflows/test.yml
+    with:
+      go-version: '1.25'
       run-integration-tests: true
     secrets: inherit
