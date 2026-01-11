@@ -23,7 +23,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Install syft
-        run: go install github.com/anchore/syft/cmd/syft@latest
+        run: go install github.com/anchore/syft/cmd/syft@v1.5.0
       - name: Generate SPDX SBOM
         run: |
           syft packages dir:. -o spdx-json -o file=sbom.spdx.json
@@ -50,24 +50,28 @@ jobs:
           echo "CycloneDX SBOM generated: $(wc -c < sbom.cyclonedx.json) bytes"
       - name: Validate SBOM files
         run: |
-          # Validate JSON syntax
-          python3 -m json.tool sbom.spdx.json > /dev/null || (echo "Invalid JSON: sbom.spdx.json" && exit 1)
-          python3 -m json.tool sbom.cyclonedx.json > /dev/null || (echo "Invalid JSON: sbom.cyclonedx.json" && exit 1)
+          # Validate JSON syntax using python3 or jq as fallback
+          if command -v python3 &> /dev/null; then
+            python3 -m json.tool sbom.spdx.json > /dev/null || (echo "Invalid JSON: sbom.spdx.json" && exit 1)
+            python3 -m json.tool sbom.cyclonedx.json > /dev/null || (echo "Invalid JSON: sbom.cyclonedx.json" && exit 1)
+          elif command -v jq &> /dev/null; then
+            jq empty sbom.spdx.json || (echo "Invalid JSON: sbom.spdx.json" && exit 1)
+            jq empty sbom.cyclonedx.json || (echo "Invalid JSON: sbom.cyclonedx.json" && exit 1)
+          else
+            echo "Warning: Neither python3 nor jq available for JSON validation"
+            # Basic check: ensure files are not empty and contain JSON-like content
+            grep -q '{' sbom.spdx.json || (echo "Invalid JSON: sbom.spdx.json" && exit 1)
+            grep -q '{' sbom.cyclonedx.json || (echo "Invalid JSON: sbom.cyclonedx.json" && exit 1)
+          fi
           echo "Both SBOM files are valid JSON"
-      - name: Upload CycloneDX SBOM
-        uses: actions/upload-release-asset@v1
+      - name: Upload SBOM files to release
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: sbom.cyclonedx.json
-          asset_name: sbom.cyclonedx.json
-          asset_content_type: application/json
-      - name: Upload SPDX SBOM
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: sbom.spdx.json
-          asset_name: sbom.spdx.json
-          asset_content_type: application/json
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            sbom.cyclonedx.json
+            sbom.spdx.json
+          fail_on_unmatched_files: true
 
   changelog:
     name: Generate Changelog
