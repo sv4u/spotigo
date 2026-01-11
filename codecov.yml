@@ -1,0 +1,120 @@
+# Codecov Configuration File
+# Documentation: https://docs.codecov.com/docs/codecov-yaml
+
+# Coverage settings
+coverage:
+  # Precision: number of decimal places for coverage percentages (0-4)
+  precision: 2
+  
+  # Round: how to round coverage percentages (up, down, nearest)
+  round: nearest
+  
+  # Range: coverage range to display (e.g., "70...100")
+  range: "20...100"
+  
+  # Status settings for coverage checks
+  status:
+    # Project status: enable/disable status checks
+    project:
+      default:
+        # Target coverage percentage for the entire project
+        target: 20
+        # Threshold: minimum coverage change allowed (percentage points)
+        threshold: 1
+        # Base: base branch for comparison (auto, or branch name)
+        base: auto
+        # Flags: which flags to include in status check
+        flags: null
+        # Paths: which paths to include in status check
+        paths: null
+        # If true, only report status if coverage decreases
+        only_pulls: false
+    
+    # Patch status: coverage for the patch/diff
+    patch:
+      default:
+        target: 20
+        threshold: 1
+        base: auto
+        flags: null
+        paths: null
+        only_pulls: false
+    
+    # Changes status: coverage changes in the PR
+    changes: false
+  
+  # Notification settings
+  notify:
+    # Slack notifications (if configured)
+    slack:
+      default:
+        # Only notify on coverage changes
+        only_pulls: false
+        # Minimum coverage threshold for notifications
+        threshold: 20
+
+# Comment settings for pull requests
+comment:
+  # Layout: how to display coverage in PR comments
+  # Options: "reach, diff, flags, files, footer, hide"
+  layout: "reach, diff, flags, files, footer"
+  
+  # Behavior: when to post comments
+  # Options: "default", "once", "never", "spammy"
+  behavior: default
+  
+  # Require changes: only post comment if coverage changes
+  require_changes: false
+
+# Flags configuration
+# Flags allow you to group coverage reports by test type or component
+flags:
+  unittests:
+    # Paths: which paths this flag applies to
+    paths:
+      - internal/
+      - cmd/
+    # Carryforward: if true, carry forward coverage from previous commits
+    carryforward: false
+
+# Ignore patterns
+# Files or paths to completely ignore
+ignore:
+  - "**/*_test.go"
+  - "**/*.pb.go"
+  - "**/vendor/"
+  - "**/examples/"
+  - "**/cmd/touchlog/main.go"
+
+# GitHub integration settings
+github_checks:
+  # Annotations: show coverage annotations in GitHub checks
+  annotations: true
+
+# Parsing settings
+parsers:
+  # Gcov parser settings
+  gcov:
+    branch_detection:
+      conditional: true
+      loop: true
+      macro: false
+      method: false
+
+# Fixes: specify how to fix coverage paths
+fixes:
+  - "internal/::internal/"
+  - "cmd/::cmd/"
+
+# Flags for different test types (if you add more test types later)
+# Example:
+# flags:
+#   integration:
+#     paths:
+#       - internal/
+#     carryforward: false
+#   e2e:
+#     paths:
+#       - cmd/
+#     carryforward: false
+
