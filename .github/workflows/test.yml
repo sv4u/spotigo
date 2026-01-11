@@ -79,7 +79,6 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && (needs.unit-tests.result == 'success' || needs.integration-tests.result == 'success')
     permissions:
-      pull-requests: write
       contents: read
     steps:
       - uses: actions/checkout@v4

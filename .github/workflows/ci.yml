@@ -17,6 +17,9 @@ jobs:
       go-version: '1.24'
       run-integration-tests: true
     secrets: inherit
+    permissions:
+      pull-requests: write
+      contents: read
 
   test-go-125:
     name: Test Go 1.25
@@ -25,3 +28,6 @@ jobs:
       go-version: '1.25'
       run-integration-tests: true
     secrets: inherit
+    permissions:
+      pull-requests: write
+      contents: read
