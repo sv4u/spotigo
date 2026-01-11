@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
   test-go-124:
     name: Test Go 1.24
