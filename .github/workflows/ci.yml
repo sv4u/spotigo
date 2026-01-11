@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test-matrix:
+    name: Test Go ${{ matrix.go-version }}
+    strategy:
+      matrix:
+        go-version:
+          - '1.23'
+          - '1.24'
+          - '1.25'
+        fail-fast: false  # Continue testing other versions if one fails
+    uses: ./.github/workflows/test.yml
+    with:
+      go-version: ${{ matrix.go-version }}
+      run-integration-tests: true
+    secrets: inherit

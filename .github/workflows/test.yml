@@ -1,0 +1,144 @@
+name: Test
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        required: true
+        type: string
+      run-integration-tests:
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache-dependency-path: go.sum
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ inputs.go-version }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ inputs.go-version }}-
+      - name: Run unit tests
+        run: go test -v -coverprofile=coverage-unit.out -covermode=atomic ./tests/unit/...
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-${{ inputs.go-version }}
+          path: coverage-unit.out
+          retention-days: 7
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    if: inputs.run-integration-tests
+    env:
+      SPOTIGO_CLIENT_ID: ${{ secrets.SPOTIGO_CLIENT_ID }}
+      SPOTIGO_CLIENT_SECRET: ${{ secrets.SPOTIGO_CLIENT_SECRET }}
+      SPOTIGO_REDIRECT_URI: ${{ secrets.SPOTIGO_REDIRECT_URI }}
+      SPOTIGO_CLIENT_USERNAME: ${{ secrets.SPOTIGO_CLIENT_USERNAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache-dependency-path: go.sum
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ inputs.go-version }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ inputs.go-version }}-
+      - name: Check for credentials
+        id: check-creds
+        run: |
+          if [ -z "$SPOTIGO_CLIENT_ID" ] || [ -z "$SPOTIGO_CLIENT_SECRET" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::Integration tests skipped: SPOTIGO_CLIENT_ID and/or SPOTIGO_CLIENT_SECRET not set"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Run integration tests
+        if: steps.check-creds.outputs.skip == 'false'
+        run: go test -v -coverprofile=coverage-integration.out -covermode=atomic ./tests/integration/...
+      - name: Upload integration coverage
+        if: steps.check-creds.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration-${{ inputs.go-version }}
+          path: coverage-integration.out
+          retention-days: 7
+      - name: Create empty coverage file if skipped
+        if: steps.check-creds.outputs.skip == 'true'
+        run: touch coverage-integration.out
+      - name: Upload empty coverage (if skipped)
+        if: steps.check-creds.outputs.skip == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration-${{ inputs.go-version }}
+          path: coverage-integration.out
+          retention-days: 7
+
+  coverage:
+    needs: [unit-tests, integration-tests]
+    runs-on: ubuntu-latest
+    if: always() && (needs.unit-tests.result == 'success' || needs.integration-tests.result == 'success')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-unit-${{ inputs.go-version }}
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-integration-${{ inputs.go-version }}
+          path: .
+      - name: Install gocovmerge
+        run: go install github.com/wadey/gocovmerge@latest
+      - name: Merge coverage reports
+        run: |
+          if [ -f coverage-integration.out ] && [ -s coverage-integration.out ]; then
+            gocovmerge coverage-unit.out coverage-integration.out > coverage-combined.out
+          else
+            cp coverage-unit.out coverage-combined.out
+          fi
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage-combined.out
+          flags: unittests
+          name: codecov-${{ inputs.go-version }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+      - name: Generate HTML coverage report
+        run: go tool cover -html=coverage-combined.out -o coverage.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ inputs.go-version }}
+          path: coverage.html
+          retention-days: 30
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          recreate: true
+          message: |
+            ## Coverage Report (Go ${{ inputs.go-version }})
+            
+            Coverage data has been uploaded to Codecov.
+            
+            [![codecov](https://codecov.io/gh/${{ github.repository }}/branch/${{ github.head_ref }}/graph/badge.svg)](https://codecov.io/gh/${{ github.repository }})

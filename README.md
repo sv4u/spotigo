@@ -2,6 +2,9 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![codecov](https://codecov.io/gh/sv4u/spotigo/branch/main/graph/badge.svg)](https://codecov.io/gh/sv4u/spotigo)
+[![CI](https://github.com/sv4u/spotigo/workflows/CI/badge.svg)](https://github.com/sv4u/spotigo/actions/workflows/ci.yml)
+[![Release](https://github.com/sv4u/spotigo/workflows/Release/badge.svg)](https://github.com/sv4u/spotigo/actions/workflows/release.yml)
 
 Spotigo is a Go client library for the Spotify Web API, providing full access to Spotify's music catalog, user data, and playback controls with type safety and idiomatic Go patterns.
 
