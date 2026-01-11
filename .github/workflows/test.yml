@@ -22,7 +22,7 @@ jobs:
           cache-dependency-path: go.sum
           cache: true
       - name: Run unit tests
-        run: go test -v -coverprofile=coverage-unit.out -covermode=atomic ./tests/unit/...
+        run: go test -v -coverprofile=coverage-unit.out -covermode=atomic -coverpkg=./... ./tests/unit/...
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-unit-${{ inputs.go-version }}
@@ -55,7 +55,7 @@ jobs:
           fi
       - name: Run integration tests
         if: steps.check-creds.outputs.skip == 'false'
-        run: go test -v -coverprofile=coverage-integration.out -covermode=atomic ./tests/integration/...
+        run: go test -v -coverprofile=coverage-integration.out -covermode=atomic -coverpkg=./... ./tests/integration/...
       - name: Upload integration coverage
         if: steps.check-creds.outputs.skip == 'false'
         uses: actions/upload-artifact@v4
