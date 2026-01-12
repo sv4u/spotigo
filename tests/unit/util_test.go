@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sv4u/spotigo"
@@ -162,4 +163,140 @@ func equalIntPtr(a, b *int) bool {
 		return false
 	}
 	return *a == *b
+}
+
+// TestParseAuthResponseURL verifies ParseAuthResponseURL function
+func TestParseAuthResponseURL(t *testing.T) {
+	testCases := []struct {
+		name          string
+		responseURL   string
+		expectedCode  string
+		expectedState string
+		expectError   bool
+		errorType     string
+	}{
+		{
+			name:          "valid URL with code and state",
+			responseURL:   "http://localhost:8080/callback?code=abc123&state=xyz789",
+			expectedCode:  "abc123",
+			expectedState: "xyz789",
+			expectError:   false,
+		},
+		{
+			name:          "valid URL with code only",
+			responseURL:   "http://localhost:8080/callback?code=abc123",
+			expectedCode:  "abc123",
+			expectedState: "",
+			expectError:   false,
+		},
+		{
+			name:          "valid URL with state only",
+			responseURL:   "http://localhost:8080/callback?state=xyz789",
+			expectedCode:  "",
+			expectedState: "xyz789",
+			expectError:   false,
+		},
+		{
+			name:          "URL with error parameter",
+			responseURL:   "http://localhost:8080/callback?error=access_denied&error_description=User%20denied%20access",
+			expectedCode:  "",
+			expectedState: "",
+			expectError:   true,
+			errorType:     "access_denied",
+		},
+		{
+			name:          "invalid URL",
+			responseURL:   "://invalid-url",
+			expectedCode:  "",
+			expectedState: "",
+			expectError:   true,
+		},
+		{
+			name:          "empty URL",
+			responseURL:   "",
+			expectedCode:  "",
+			expectedState: "",
+			expectError:   false, // Empty URL is technically valid (just no params)
+		},
+		{
+			name:          "URL with special characters in state",
+			responseURL:   "http://localhost:8080/callback?code=abc123&state=state%20with%20spaces",
+			expectedCode:  "abc123",
+			expectedState: "state with spaces",
+			expectError:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, state, err := spotigo.ParseAuthResponseURL(tc.responseURL)
+
+			if tc.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				if tc.errorType != "" {
+					oauthErr, ok := err.(*spotigo.SpotifyOAuthError)
+					if !ok {
+						t.Errorf("expected SpotifyOAuthError, got %T", err)
+					} else if oauthErr.ErrorType != tc.errorType {
+						t.Errorf("expected error type %q, got %q", tc.errorType, oauthErr.ErrorType)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if code != tc.expectedCode {
+					t.Errorf("expected code %q, got %q", tc.expectedCode, code)
+				}
+				if state != tc.expectedState {
+					t.Errorf("expected state %q, got %q", tc.expectedState, state)
+				}
+			}
+		})
+	}
+}
+
+// TestGenerateRandomState verifies GenerateRandomState function
+func TestGenerateRandomState(t *testing.T) {
+	// Test that it generates a non-empty string
+	state1, err := spotigo.GenerateRandomState()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if state1 == "" {
+		t.Error("expected non-empty state, got empty string")
+	}
+
+	// Test that it generates different values on each call
+	state2, err := spotigo.GenerateRandomState()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if state1 == state2 {
+		t.Error("expected different states on each call, got same value")
+	}
+
+	// Test that it generates valid base64 URL encoding
+	// Base64 URL encoding should only contain: A-Z, a-z, 0-9, -, _, and = (for padding)
+	validChars := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_="
+	for _, char := range state1 {
+		if !strings.ContainsRune(validChars, char) {
+			t.Errorf("state contains invalid character: %c", char)
+		}
+	}
+
+	// Test multiple calls to ensure randomness
+	states := make(map[string]bool)
+	for i := 0; i < 10; i++ {
+		state, err := spotigo.GenerateRandomState()
+		if err != nil {
+			t.Fatalf("unexpected error on iteration %d: %v", i, err)
+		}
+		if states[state] {
+			t.Errorf("duplicate state generated: %s", state)
+		}
+		states[state] = true
+	}
 }

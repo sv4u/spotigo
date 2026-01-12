@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -442,5 +443,114 @@ func TestFileCacheHandlerReturnsCopy(t *testing.T) {
 
 	if cached2.AccessToken != "original_token" {
 		t.Errorf("expected 'original_token', got %q (token was modified externally - copy not returned)", cached2.AccessToken)
+	}
+}
+
+// TestFileCacheHandlerSanitizeUsername verifies that invalid filename characters are sanitized
+func TestFileCacheHandlerSanitizeUsername(t *testing.T) {
+	testCases := []struct {
+		name           string
+		username       string
+		expectedSuffix string // Expected suffix in cache path
+	}{
+		{
+			name:           "username with forward slash",
+			username:       "user/name",
+			expectedSuffix: "-user_name",
+		},
+		{
+			name:           "username with backslash",
+			username:       "user\\name",
+			expectedSuffix: "-user_name",
+		},
+		{
+			name:           "username with colon",
+			username:       "user:name",
+			expectedSuffix: "-user_name",
+		},
+		{
+			name:           "username with asterisk",
+			username:       "user*name",
+			expectedSuffix: "-user_name",
+		},
+		{
+			name:           "username with question mark",
+			username:       "user?name",
+			expectedSuffix: "-user_name",
+		},
+		{
+			name:           "username with quotes",
+			username:       "user\"name",
+			expectedSuffix: "-user_name",
+		},
+		{
+			name:           "username with angle brackets",
+			username:       "user<name>",
+			expectedSuffix: "-user_name_",
+		},
+		{
+			name:           "username with pipe",
+			username:       "user|name",
+			expectedSuffix: "-user_name",
+		},
+		{
+			name:           "username with multiple invalid chars",
+			username:       "user/name:test*file?",
+			expectedSuffix: "-user_name_test_file_",
+		},
+		{
+			name:           "normal username",
+			username:       "normaluser",
+			expectedSuffix: "-normaluser",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create handler with username (will use default cache path with sanitized username)
+			handler, err := spotigo.NewFileCacheHandler("", tc.username)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// Check that cache path ends with expected suffix
+			if !strings.HasSuffix(handler.CachePath, tc.expectedSuffix) {
+				t.Errorf("expected cache path to end with %q, got %q", tc.expectedSuffix, handler.CachePath)
+			}
+
+			// Verify no invalid characters in filename (not the full path)
+			// Get just the filename from the path
+			filename := filepath.Base(handler.CachePath)
+			invalidChars := []string{"\\", ":", "*", "?", "\"", "<", ">", "|"}
+			for _, char := range invalidChars {
+				if strings.Contains(filename, char) {
+					t.Errorf("cache filename contains invalid character %q: %s (full path: %s)", char, filename, handler.CachePath)
+				}
+			}
+		})
+	}
+}
+
+// TestFileCacheHandlerWithUsername verifies cache path generation with username
+func TestFileCacheHandlerWithUsername(t *testing.T) {
+	// Test with username - should use .cache-{sanitized_username}
+	handler, err := spotigo.NewFileCacheHandler("", "testuser")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Cache path should end with .cache-testuser
+	if !strings.HasSuffix(handler.CachePath, ".cache-testuser") {
+		t.Errorf("expected cache path to end with .cache-testuser, got %q", handler.CachePath)
+	}
+
+	// Test with empty username - should use .cache
+	handler2, err := spotigo.NewFileCacheHandler("", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.HasSuffix(handler2.CachePath, ".cache") {
+		t.Errorf("expected cache path to end with .cache, got %q", handler2.CachePath)
 	}
 }

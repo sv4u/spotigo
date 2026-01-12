@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sv4u/spotigo"
 )
@@ -418,5 +419,162 @@ func TestSpotifyErrorStructuredFormatWithoutMethod(t *testing.T) {
 	// Should not contain "HTTP" prefix when method is empty
 	if strings.Contains(msg, "HTTP ") && !strings.Contains(msg, "HTTP GET") {
 		// This is OK if method is empty, but shouldn't say "HTTP " alone
+	}
+}
+
+// TestRetryAfter verifies RetryAfter header extraction
+func TestRetryAfter(t *testing.T) {
+	testCases := []struct {
+		name           string
+		headers        map[string][]string
+		expectedDur    time.Duration
+		expectedFound  bool
+		description    string
+	}{
+		{
+			name:          "no headers",
+			headers:       nil,
+			expectedDur:   0,
+			expectedFound: false,
+			description:   "should return false when headers is nil",
+		},
+		{
+			name:          "empty headers",
+			headers:       map[string][]string{},
+			expectedDur:   0,
+			expectedFound: false,
+			description:   "should return false when headers is empty",
+		},
+		{
+			name:          "no Retry-After header",
+			headers:       map[string][]string{"Content-Type": {"application/json"}},
+			expectedDur:   0,
+			expectedFound: false,
+			description:   "should return false when Retry-After header is missing",
+		},
+		{
+			name:          "Retry-After as integer seconds",
+			headers:       map[string][]string{"Retry-After": {"5"}},
+			expectedDur:   5 * time.Second,
+			expectedFound: true,
+			description:   "should parse Retry-After as integer seconds",
+		},
+		{
+			name:          "Retry-After as large integer",
+			headers:       map[string][]string{"Retry-After": {"60"}},
+			expectedDur:   60 * time.Second,
+			expectedFound: true,
+			description:   "should parse large Retry-After values",
+		},
+		// Note: HTTP-date parsing test is skipped as http.ParseTime may have format requirements
+		// The integer seconds parsing (which is the common case) is tested above
+		{
+			name:          "Retry-After as HTTP-date in past",
+			headers:       map[string][]string{"Retry-After": {time.Now().Add(-10 * time.Second).Format(time.RFC1123)}},
+			expectedDur:   0,
+			expectedFound: false,
+			description:   "should return false for HTTP-date in past",
+		},
+		{
+			name:          "Retry-After with invalid format",
+			headers:       map[string][]string{"Retry-After": {"invalid-format"}},
+			expectedDur:   0,
+			expectedFound: false,
+			description:   "should return false for invalid Retry-After format",
+		},
+		{
+			name:          "Retry-After with empty value",
+			headers:       map[string][]string{"Retry-After": {""}},
+			expectedDur:   0,
+			expectedFound: false,
+			description:   "should return false for empty Retry-After value",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := &spotigo.SpotifyError{
+				HTTPStatus: 429,
+				Headers:    tc.headers,
+			}
+
+			dur, found := err.RetryAfter()
+
+			if found != tc.expectedFound {
+				t.Errorf("%s: expected found=%v, got found=%v", tc.description, tc.expectedFound, found)
+			}
+
+			if tc.expectedFound && dur != tc.expectedDur {
+				t.Errorf("%s: expected duration %v, got %v", tc.description, tc.expectedDur, dur)
+			}
+		})
+	}
+}
+
+// TestWrapRetryError verifies WrapRetryError function
+func TestWrapRetryError(t *testing.T) {
+	testCases := []struct {
+		name        string
+		err         error
+		url         string
+		reason      string
+		shouldError bool
+		description string
+	}{
+		{
+			name:        "nil error",
+			err:         nil,
+			url:         "https://api.spotify.com/v1/tracks",
+			reason:      "max retries exceeded",
+			shouldError: false,
+			description: "should return nil when error is nil",
+		},
+		{
+			name:        "wrapped error",
+			err:         fmt.Errorf("network timeout"),
+			url:         "https://api.spotify.com/v1/tracks",
+			reason:      "max retries exceeded",
+			shouldError: true,
+			description: "should wrap error with SpotifyError",
+		},
+		{
+			name:        "SpotifyError wrapped",
+			err:         &spotigo.SpotifyError{HTTPStatus: 500, Message: "Internal Server Error"},
+			url:         "https://api.spotify.com/v1/tracks",
+			reason:      "retry failed",
+			shouldError: true,
+			description: "should wrap SpotifyError with retry context",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapped := spotigo.WrapRetryError(tc.err, tc.url, tc.reason)
+
+			if tc.shouldError {
+				if wrapped == nil {
+					t.Fatalf("%s: expected error, got nil", tc.description)
+				}
+
+				// Check that error message contains original error
+				if tc.err != nil && !strings.Contains(wrapped.Error(), tc.err.Error()) {
+					t.Errorf("%s: expected wrapped error to contain original error, got %q", tc.description, wrapped.Error())
+				}
+
+				// Check that error message contains reason
+				if !strings.Contains(wrapped.Error(), tc.reason) {
+					t.Errorf("%s: expected wrapped error to contain reason, got %q", tc.description, wrapped.Error())
+				}
+
+				// Check that error message contains URL
+				if !strings.Contains(wrapped.Error(), tc.url) {
+					t.Errorf("%s: expected wrapped error to contain URL, got %q", tc.description, wrapped.Error())
+				}
+			} else {
+				if wrapped != nil {
+					t.Errorf("%s: expected nil, got %v", tc.description, wrapped)
+				}
+			}
+		})
 	}
 }

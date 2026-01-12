@@ -1,6 +1,6 @@
 # Spotigo
 
-[![Go Version](https://img.shields.io/badge/go-1.24+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![codecov](https://codecov.io/gh/sv4u/spotigo/branch/main/graph/badge.svg)](https://codecov.io/gh/sv4u/spotigo)
 [![CI](https://github.com/sv4u/spotigo/workflows/CI/badge.svg)](https://github.com/sv4u/spotigo/actions/workflows/ci.yml)
@@ -40,6 +40,7 @@ Before using Spotigo, you'll need:
    - Redirect URI (for OAuth flows)
 
 Once you have your credentials, set them as environment variables:
+
 ```bash
 export SPOTIGO_CLIENT_ID="your_client_id"
 export SPOTIGO_CLIENT_SECRET="your_client_secret"
@@ -56,56 +57,56 @@ Perfect for accessing public Spotify data without user authentication:
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
-	"os"
+  "context"
+  "fmt"
+  "log"
+  "os"
 
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 func main() {
-	// Get credentials from environment variables
-	clientID := os.Getenv("SPOTIGO_CLIENT_ID")
-	clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
+  // Get credentials from environment variables
+  clientID := os.Getenv("SPOTIGO_CLIENT_ID")
+  clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
 
-	if clientID == "" || clientSecret == "" {
-		log.Fatal("SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET must be set")
-	}
+  if clientID == "" || clientSecret == "" {
+    log.Fatal("SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET must be set")
+  }
 
-	// Create authentication manager
-	auth, err := spotigo.NewClientCredentials(clientID, clientSecret)
-	if err != nil {
-		log.Fatalf("Failed to create auth: %v", err)
-	}
+  // Create authentication manager
+  auth, err := spotigo.NewClientCredentials(clientID, clientSecret)
+  if err != nil {
+    log.Fatalf("Failed to create auth: %v", err)
+  }
 
-	// Create client
-	client, err := spotigo.NewClient(auth)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
+  // Create client
+  client, err := spotigo.NewClient(auth)
+  if err != nil {
+    log.Fatalf("Failed to create client: %v", err)
+  }
 
-	ctx := context.Background()
+  ctx := context.Background()
 
-	// Search for tracks
-	results, err := client.Search(ctx, "weezer", "track", &spotigo.SearchOptions{
-		Limit: 20,
-	})
-	if err != nil {
-		log.Fatalf("Search failed: %v", err)
-	}
+  // Search for tracks
+  results, err := client.Search(ctx, "weezer", "track", &spotigo.SearchOptions{
+    Limit: 20,
+  })
+  if err != nil {
+    log.Fatalf("Search failed: %v", err)
+  }
 
-	// Display results
-	fmt.Println("Search Results:")
-	for i, track := range results.Tracks.Items {
-		if track != nil {
-			artistName := "Unknown"
-			if len(track.Artists) > 0 && track.Artists[0] != nil {
-				artistName = track.Artists[0].Name
-			}
-			fmt.Printf("%d. %s by %s\n", i+1, track.Name, artistName)
-		}
-	}
+  // Display results
+  fmt.Println("Search Results:")
+  for i, track := range results.Tracks.Items {
+    if track != nil {
+      artistName := "Unknown"
+      if len(track.Artists) > 0 && track.Artists[0] != nil {
+        artistName = track.Artists[0].Name
+      }
+      fmt.Printf("%d. %s by %s\n", i+1, track.Name, artistName)
+    }
+  }
 }
 ```
 
@@ -117,77 +118,77 @@ For accessing user-specific data like playlists, saved tracks, and playback cont
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
-	"os"
+  "context"
+  "fmt"
+  "log"
+  "os"
 
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 func main() {
-	clientID := os.Getenv("SPOTIGO_CLIENT_ID")
-	clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
-	redirectURI := os.Getenv("SPOTIGO_REDIRECT_URI")
+  clientID := os.Getenv("SPOTIGO_CLIENT_ID")
+  clientSecret := os.Getenv("SPOTIGO_CLIENT_SECRET")
+  redirectURI := os.Getenv("SPOTIGO_REDIRECT_URI")
 
-	if clientID == "" || clientSecret == "" {
-		log.Fatal("SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET must be set")
-	}
+  if clientID == "" || clientSecret == "" {
+    log.Fatal("SPOTIGO_CLIENT_ID and SPOTIGO_CLIENT_SECRET must be set")
+  }
 
-	// Create OAuth manager with required scopes
-	auth, err := spotigo.NewSpotifyOAuth(
-		clientID,
-		clientSecret,
-		redirectURI,
-		"user-read-private user-read-email user-library-read",
-	)
-	if err != nil {
-		log.Fatalf("Failed to create OAuth: %v", err)
-	}
+  // Create OAuth manager with required scopes
+  auth, err := spotigo.NewSpotifyOAuth(
+    clientID,
+    clientSecret,
+    redirectURI,
+    "user-read-private user-read-email user-library-read",
+  )
+  if err != nil {
+    log.Fatalf("Failed to create OAuth: %v", err)
+  }
 
-	ctx := context.Background()
+  ctx := context.Background()
 
-	// Get authorization code (opens browser automatically)
-	code, err := auth.GetAuthorizationCode(ctx, true)
-	if err != nil {
-		log.Fatalf("Failed to get authorization code: %v", err)
-	}
+  // Get authorization code (opens browser automatically)
+  code, err := auth.GetAuthorizationCode(ctx, true)
+  if err != nil {
+    log.Fatalf("Failed to get authorization code: %v", err)
+  }
 
-	// Exchange code for tokens
-	if err := auth.ExchangeCode(ctx, code); err != nil {
-		log.Fatalf("Failed to exchange code: %v", err)
-	}
+  // Exchange code for tokens
+  if err := auth.ExchangeCode(ctx, code); err != nil {
+    log.Fatalf("Failed to exchange code: %v", err)
+  }
 
-	// Create client
-	client, err := spotigo.NewClient(auth)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
+  // Create client
+  client, err := spotigo.NewClient(auth)
+  if err != nil {
+    log.Fatalf("Failed to create client: %v", err)
+  }
 
-	// Get current user profile
-	user, err := client.CurrentUser(ctx)
-	if err != nil {
-		log.Fatalf("Failed to get user: %v", err)
-	}
+  // Get current user profile
+  user, err := client.CurrentUser(ctx)
+  if err != nil {
+    log.Fatalf("Failed to get user: %v", err)
+  }
 
-	fmt.Printf("Logged in as: %s (%s)\n", user.DisplayName, user.ID)
+  fmt.Printf("Logged in as: %s (%s)\n", user.DisplayName, user.ID)
 
-	// Get saved tracks
-	tracks, err := client.CurrentUserSavedTracks(ctx, nil)
-	if err != nil {
-		log.Fatalf("Failed to get saved tracks: %v", err)
-	}
+  // Get saved tracks
+  tracks, err := client.CurrentUserSavedTracks(ctx, nil)
+  if err != nil {
+    log.Fatalf("Failed to get saved tracks: %v", err)
+  }
 
-	fmt.Println("\nYour Saved Tracks:")
-	for _, item := range tracks.Items {
-		if item != nil && item.Track != nil {
-			artistName := "Unknown"
-			if len(item.Track.Artists) > 0 && item.Track.Artists[0] != nil {
-				artistName = item.Track.Artists[0].Name
-			}
-			fmt.Printf("  %s – %s\n", artistName, item.Track.Name)
-		}
-	}
+  fmt.Println("\nYour Saved Tracks:")
+  for _, item := range tracks.Items {
+    if item != nil && item.Track != nil {
+      artistName := "Unknown"
+      if len(item.Track.Artists) > 0 && item.Track.Artists[0] != nil {
+        artistName = item.Track.Artists[0].Name
+      }
+      fmt.Printf("  %s – %s\n", artistName, item.Track.Name)
+    }
+  }
 }
 ```
 
@@ -210,10 +211,10 @@ Use for accessing user-specific data:
 
 ```go
 auth, err := spotigo.NewSpotifyOAuth(
-	clientID,
-	clientSecret,
-	redirectURI,
-	"user-read-private user-read-email",
+  clientID,
+  clientSecret,
+  redirectURI,
+  "user-read-private user-read-email",
 )
 code, err := auth.GetAuthorizationCode(ctx, true)
 err = auth.ExchangeCode(ctx, code)
@@ -226,9 +227,9 @@ Use for public clients (mobile apps, SPAs) without client secret:
 
 ```go
 auth, err := spotigo.NewSpotifyPKCE(
-	clientID,
-	redirectURI,
-	"user-read-private",
+  clientID,
+  redirectURI,
+  "user-read-private",
 )
 code, err := auth.GetAuthorizationCode(ctx, true)
 err = auth.ExchangeCode(ctx, code)
@@ -256,15 +257,15 @@ client, err := spotigo.NewClient(auth)
 
 ```go
 import (
-	"net/http"
-	"time"
+  "net/http"
+  "time"
 
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 // Custom HTTP client
 httpClient := &http.Client{
-	Timeout: 30 * time.Second,
+  Timeout: 30 * time.Second,
 }
 
 // Custom cache handler (set on auth manager, not client)
@@ -273,19 +274,19 @@ auth.CacheHandler = cache
 
 // Custom retry configuration
 retryConfig := &spotigo.RetryConfig{
-	MaxRetries:     3,
-	StatusRetries: 3,
-	StatusForcelist: []int{429, 500, 502, 503, 504},
-	BackoffFactor:  0.3,
+  MaxRetries:     3,
+  StatusRetries: 3,
+  StatusForcelist: []int{429, 500, 502, 503, 504},
+  BackoffFactor:  0.3,
 }
 
 // Create client with options
 client, err := spotigo.NewClient(
-	auth,
-	spotigo.WithHTTPClient(httpClient),
-	spotigo.WithRetryConfig(retryConfig),
-	spotigo.WithLanguage("en"),
-	spotigo.WithRequestTimeout(10*time.Second),
+  auth,
+  spotigo.WithHTTPClient(httpClient),
+  spotigo.WithRetryConfig(retryConfig),
+  spotigo.WithLanguage("en"),
+  spotigo.WithRequestTimeout(10*time.Second),
 )
 ```
 
@@ -295,28 +296,28 @@ client, err := spotigo.NewClient(
 
 ```go
 import (
-	"context"
-	"fmt"
-	"log"
+  "context"
+  "fmt"
+  "log"
 
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 ctx := context.Background()
 
 // Search for tracks
 results, err := client.Search(ctx, "Blinding Lights", "track", &spotigo.SearchOptions{
-	Limit:  10,
-	Market: "US",
+  Limit:  10,
+  Market: "US",
 })
 if err != nil {
-	log.Fatal(err)
+  log.Fatal(err)
 }
 
 for _, track := range results.Tracks.Items {
-	if track != nil {
-		fmt.Println(track.Name)
-	}
+  if track != nil {
+    fmt.Println(track.Name)
+  }
 }
 ```
 
@@ -326,8 +327,8 @@ Spotigo accepts multiple input formats and automatically parses them:
 
 ```go
 import (
-	"context"
-	"github.com/sv4u/spotigo"
+  "context"
+  "github.com/sv4u/spotigo"
 )
 
 // All of these work:
@@ -340,36 +341,36 @@ track3, _ := client.Track(ctx, "https://open.spotify.com/track/4iV5W9uYEdYUVa79A
 
 ```go
 import (
-	"context"
-	"fmt"
-	"log"
+  "context"
+  "fmt"
+  "log"
 
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 // Get first page
 tracks, err := client.AlbumTracks(ctx, albumID, nil)
 if err != nil {
-	log.Fatal(err)
+  log.Fatal(err)
 }
 
 // Iterate through all pages
 for tracks != nil {
-	for _, item := range tracks.Items {
-		if item != nil && item.Track != nil {
-			fmt.Println(item.Track.Name)
-		}
-	}
+  for _, item := range tracks.Items {
+    if item != nil && item.Track != nil {
+      fmt.Println(item.Track.Name)
+    }
+  }
 
-	// Get next page
-	if tracks.Next != "" {
-		tracks, err = tracks.Next()
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		break
-	}
+  // Get next page
+  if tracks.Next != "" {
+    tracks, err = tracks.Next()
+    if err != nil {
+      log.Fatal(err)
+    }
+  } else {
+    break
+  }
 }
 ```
 
@@ -377,33 +378,33 @@ for tracks != nil {
 
 ```go
 import (
-	"context"
-	"fmt"
+  "context"
+  "fmt"
 
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 track, err := client.Track(ctx, trackID)
 if err != nil {
-	// Check error type
-	if spotifyErr, ok := err.(*spotigo.SpotifyError); ok {
-		switch spotifyErr.HTTPStatus {
-		case 404:
-			fmt.Println("Track not found")
-		case 401:
-			fmt.Println("Authentication required")
-		case 429:
-			fmt.Println("Rate limit exceeded")
-			if delay, ok := spotifyErr.RetryAfter(); ok {
-				fmt.Printf("Retry after: %v\n", delay)
-			}
-		default:
-			fmt.Printf("API error: %v\n", spotifyErr)
-		}
-	} else {
-		fmt.Printf("Unexpected error: %v\n", err)
-	}
-	return
+  // Check error type
+  if spotifyErr, ok := err.(*spotigo.SpotifyError); ok {
+    switch spotifyErr.HTTPStatus {
+    case 404:
+      fmt.Println("Track not found")
+    case 401:
+      fmt.Println("Authentication required")
+    case 429:
+      fmt.Println("Rate limit exceeded")
+      if delay, ok := spotifyErr.RetryAfter(); ok {
+        fmt.Printf("Retry after: %v\n", delay)
+      }
+    default:
+      fmt.Printf("API error: %v\n", spotifyErr)
+    }
+  } else {
+    fmt.Printf("Unexpected error: %v\n", err)
+  }
+  return
 }
 
 // Use track
@@ -414,11 +415,11 @@ fmt.Println(track.Name)
 
 ```go
 import (
-	"context"
-	"fmt"
-	"time"
+  "context"
+  "fmt"
+  "time"
 
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 // Create context with timeout
@@ -428,13 +429,13 @@ defer cancel()
 // Use context in API call
 track, err := client.Track(ctx, trackID)
 if err != nil {
-	if err == context.DeadlineExceeded {
-		fmt.Println("Request timed out")
-	} else if err == context.Canceled {
-		fmt.Println("Request canceled")
-	} else {
-		fmt.Printf("Error: %v\n", err)
-	}
+  if err == context.DeadlineExceeded {
+    fmt.Println("Request timed out")
+  } else if err == context.Canceled {
+    fmt.Println("Request canceled")
+  } else {
+    fmt.Printf("Error: %v\n", err)
+  }
 }
 ```
 
@@ -444,17 +445,17 @@ All API responses are strongly-typed Go structs:
 
 ```go
 import (
-	"context"
-	"fmt"
-	"log"
+  "context"
+  "fmt"
+  "log"
 
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 // Track is a typed struct, not a map
 track, err := client.Track(ctx, trackID)
 if err != nil {
-	log.Fatal(err)
+  log.Fatal(err)
 }
 
 // Direct field access with type safety
@@ -465,14 +466,14 @@ fmt.Println(track.Explicit)      // bool
 
 // Nested structs are also typed
 if len(track.Artists) > 0 {
-	artist := track.Artists[0]
-	fmt.Println(artist.Name)      // string
-	fmt.Println(artist.ID)        // string
+  artist := track.Artists[0]
+  fmt.Println(artist.Name)      // string
+  fmt.Println(artist.ID)        // string
 }
 
 // Optional fields use pointers
 if track.Album != nil {
-	fmt.Println(track.Album.Name)
+  fmt.Println(track.Album.Name)
 }
 ```
 
@@ -514,15 +515,15 @@ Spotigo automatically retries failed requests with exponential backoff:
 
 ```go
 import (
-	"github.com/sv4u/spotigo"
+  "github.com/sv4u/spotigo"
 )
 
 retryConfig := &spotigo.RetryConfig{
-	MaxRetries:     3,              // Maximum retry attempts
-	StatusRetries: 3,               // Retries for status codes
-	StatusForcelist: []int{429, 500, 502, 503, 504}, // Retryable status codes
-	BackoffFactor:  0.3,            // Backoff multiplier
-	RetryAfterHeader: true,         // Respect Retry-After header
+  MaxRetries:     3,              // Maximum retry attempts
+  StatusRetries: 3,               // Retries for status codes
+  StatusForcelist: []int{429, 500, 502, 503, 504}, // Retryable status codes
+  BackoffFactor:  0.3,            // Backoff multiplier
+  RetryAfterHeader: true,         // Respect Retry-After header
 }
 
 client, err := spotigo.NewClient(auth, spotigo.WithRetryConfig(retryConfig))

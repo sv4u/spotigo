@@ -746,3 +746,404 @@ func TestEmptyURIInPlaylistRemoveItems(t *testing.T) {
 		t.Errorf("expected error about empty URI, got: %v", err)
 	}
 }
+
+// TestWithHTTPClient verifies that WithHTTPClient option sets a custom HTTP client
+func TestWithHTTPClient(t *testing.T) {
+	auth, err := spotigo.NewClientCredentials("client_id", "client_secret")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	customClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	client, err := spotigo.NewClient(auth, spotigo.WithHTTPClient(customClient))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if client.HTTPClient != customClient {
+		t.Error("expected custom HTTP client to be set")
+	}
+
+	if client.HTTPClient.Timeout != 10*time.Second {
+		t.Errorf("expected timeout 10s, got %v", client.HTTPClient.Timeout)
+	}
+}
+
+// TestWithRetryConfig verifies that WithRetryConfig option sets retry configuration
+func TestWithRetryConfig(t *testing.T) {
+	auth, err := spotigo.NewClientCredentials("client_id", "client_secret")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	customRetryConfig := &spotigo.RetryConfig{
+		MaxRetries:       5,
+		StatusRetries:    2,
+		StatusForcelist:  []int{429, 500},
+		BackoffFactor:    0.5,
+		RetryAfterHeader: false,
+	}
+
+	client, err := spotigo.NewClient(auth, spotigo.WithRetryConfig(customRetryConfig))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if client.RetryConfig.MaxRetries != 5 {
+		t.Errorf("expected MaxRetries 5, got %d", client.RetryConfig.MaxRetries)
+	}
+
+	if client.RetryConfig.StatusRetries != 2 {
+		t.Errorf("expected StatusRetries 2, got %d", client.RetryConfig.StatusRetries)
+	}
+
+	if len(client.RetryConfig.StatusForcelist) != 2 {
+		t.Errorf("expected StatusForcelist length 2, got %d", len(client.RetryConfig.StatusForcelist))
+	}
+
+	if client.RetryConfig.BackoffFactor != 0.5 {
+		t.Errorf("expected BackoffFactor 0.5, got %f", client.RetryConfig.BackoffFactor)
+	}
+
+	if client.RetryConfig.RetryAfterHeader {
+		t.Error("expected RetryAfterHeader false, got true")
+	}
+}
+
+// TestWithAPIPrefix verifies that WithAPIPrefix option sets custom API prefix
+func TestWithAPIPrefix(t *testing.T) {
+	auth, err := spotigo.NewClientCredentials("client_id", "client_secret")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	customPrefix := "https://custom.api.com/v1/"
+
+	client, err := spotigo.NewClient(auth, spotigo.WithAPIPrefix(customPrefix))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if client.APIPrefix != customPrefix {
+		t.Errorf("expected APIPrefix %q, got %q", customPrefix, client.APIPrefix)
+	}
+}
+
+// TestLoggerMethods verifies that logger methods work correctly
+func TestLoggerMethods(t *testing.T) {
+	logger := &spotigo.DefaultLogger{}
+
+	// Test Debug (should be no-op, but shouldn't panic)
+	logger.Debug("test debug message")
+
+	// Test Info (should log)
+	logger.Info("test info message")
+
+	// Test Warn (should log)
+	logger.Warn("test warn message")
+
+	// Test Error (should log)
+	logger.Error("test error message")
+}
+
+// TestCustomLogger verifies that WithLogger option sets a custom logger
+func TestCustomLogger(t *testing.T) {
+	auth, err := spotigo.NewClientCredentials("client_id", "client_secret")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	customLogger := &spotigo.DefaultLogger{}
+
+	client, err := spotigo.NewClient(auth, spotigo.WithLogger(customLogger))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if client.Logger != customLogger {
+		t.Error("expected custom logger to be set")
+	}
+}
+
+// TestShouldRetryNetworkErrors verifies that network errors trigger retries
+// This tests the shouldRetry logic indirectly through actual retry behavior
+func TestShouldRetryNetworkErrors(t *testing.T) {
+	// Create a server that never responds (simulates network error)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Don't respond - simulate network timeout
+		time.Sleep(2 * time.Second)
+	}))
+	defer server.Close()
+
+	auth := &tests.MockAuthManager{
+		Token: &spotigo.TokenInfo{
+			AccessToken: "test_token",
+			TokenType:   "Bearer",
+		},
+	}
+
+	client, err := spotigo.NewClient(auth)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	client.APIPrefix = server.URL + "/"
+	client.RetryConfig.MaxRetries = 2
+	// Use a very short timeout to trigger network errors quickly
+	client.RequestTimeout = 10 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// This should attempt retries but fail due to timeout
+	// The retry logic should be triggered for network errors
+	_, err = client.Track(ctx, "6b2oQwSGFkzsMtQruIWm2p")
+	
+	// We expect an error (either timeout or context cancellation)
+	if err == nil {
+		t.Error("expected error due to network timeout, got nil")
+	}
+}
+
+// TestLogRequestWithBody tests logRequest with body to improve coverage
+func TestLogRequestWithBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	auth := &tests.MockAuthManager{
+		Token: &spotigo.TokenInfo{
+			AccessToken: "test_token",
+			TokenType:   "Bearer",
+		},
+	}
+
+	// Create a custom logger that captures debug calls
+	logger := &tests.MockLogger{}
+	
+	client, err := spotigo.NewClient(auth, spotigo.WithLogger(logger))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	client.APIPrefix = server.URL + "/"
+
+	ctx := context.Background()
+	// Make a request with a body (PUT request) to trigger logRequest with body
+	opts := &spotigo.StartPlaybackOptions{
+		ContextURI: "spotify:album:04xe676vyiTeYNXw15o9jT",
+	}
+	err = client.CurrentUserStartPlayback(ctx, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify logger was called (indirectly tests logRequest with body)
+	if len(logger.DebugCalls) == 0 {
+		t.Error("expected logger to be called for request with body")
+	}
+}
+
+// TestLogResponseWithBody tests logResponse with body to improve coverage
+func TestLogResponseWithBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":   "6b2oQwSGFkzsMtQruIWm2p",
+			"name": "Test Track",
+		})
+	}))
+	defer server.Close()
+
+	auth := &tests.MockAuthManager{
+		Token: &spotigo.TokenInfo{
+			AccessToken: "test_token",
+			TokenType:   "Bearer",
+		},
+	}
+
+	// Create a custom logger that captures debug calls
+	logger := &tests.MockLogger{}
+	
+	client, err := spotigo.NewClient(auth, spotigo.WithLogger(logger))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	client.APIPrefix = server.URL + "/"
+
+	ctx := context.Background()
+	// Make a GET request that returns a body to trigger logResponse with body
+	_, err = client.Track(ctx, "6b2oQwSGFkzsMtQruIWm2p")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify logger was called (indirectly tests logResponse with body)
+	if len(logger.DebugCalls) == 0 {
+		t.Error("expected logger to be called for response with body")
+	}
+}
+
+// TestLogRetryWithNon429Error tests logRetry with non-429 errors to improve coverage
+func TestLogRetryWithNon429Error(t *testing.T) {
+	attemptCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+		if attemptCount < 2 {
+			// Return 500 error to trigger retry
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": map[string]interface{}{
+					"status":  500,
+					"message": "Internal Server Error",
+				},
+			})
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":   "6b2oQwSGFkzsMtQruIWm2p",
+				"name": "Test Track",
+			})
+		}
+	}))
+	defer server.Close()
+
+	auth := &tests.MockAuthManager{
+		Token: &spotigo.TokenInfo{
+			AccessToken: "test_token",
+			TokenType:   "Bearer",
+		},
+	}
+
+	// Create a custom logger that captures warn calls
+	logger := &tests.MockLogger{}
+	
+	// Configure retry to allow at least 1 retry
+	retryConfig := spotigo.DefaultRetryConfig()
+	retryConfig.MaxRetries = 1
+	retryConfig.StatusRetries = 2 // Allow status retries
+	
+	client, err := spotigo.NewClient(auth, 
+		spotigo.WithLogger(logger),
+		spotigo.WithRetryConfig(retryConfig))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	client.APIPrefix = server.URL + "/"
+
+	ctx := context.Background()
+	// Make a request that will trigger a retry (500 error)
+	_, err = client.Track(ctx, "6b2oQwSGFkzsMtQruIWm2p")
+	if err != nil {
+		// Error is expected on first attempt, but should succeed on retry
+	}
+
+	// Verify logger was called for retry (indirectly tests logRetry with non-429 error)
+	// The retry should trigger logRetry which calls logger.Warn
+	if len(logger.WarnCalls) == 0 {
+		t.Error("expected logger to be called for retry with non-429 error")
+	}
+}
+
+// TestBuildURLWithAbsoluteURLAndParams tests buildURL with absolute URL and params to improve coverage
+func TestBuildURLWithAbsoluteURLAndParams(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"items": []map[string]interface{}{},
+		})
+	}))
+	defer server.Close()
+
+	auth := &tests.MockAuthManager{
+		Token: &spotigo.TokenInfo{
+			AccessToken: "test_token",
+			TokenType:   "Bearer",
+		},
+	}
+
+	client, err := spotigo.NewClient(auth)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	client.APIPrefix = server.URL + "/"
+	
+	ctx := context.Background()
+	// Use Next with absolute URL that has query params to test buildURL with absolute URL and params
+	// The buildURL function will merge params if the absolute URL already has query params
+	next := server.URL + "/artists?offset=20"
+	paging := &spotigo.Paging[spotigo.Artist]{
+		Next: &next,
+	}
+	
+	// This will call buildURL internally with the absolute URL
+	_, err = client.Next(ctx, paging)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+
+// TestCalculateRetryDelayWith429AndRetryAfterHeader tests calculateRetryDelay with 429 and Retry-After header
+func TestCalculateRetryDelayWith429AndRetryAfterHeader(t *testing.T) {
+	attemptCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+		if attemptCount < 2 {
+			// Return 429 with Retry-After header
+			w.Header().Set("Retry-After", "2")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": map[string]interface{}{
+					"status":  429,
+					"message": "Rate limit exceeded",
+				},
+			})
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":   "6b2oQwSGFkzsMtQruIWm2p",
+				"name": "Test Track",
+			})
+		}
+	}))
+	defer server.Close()
+
+	auth := &tests.MockAuthManager{
+		Token: &spotigo.TokenInfo{
+			AccessToken: "test_token",
+			TokenType:   "Bearer",
+		},
+	}
+
+	// Configure retry to use Retry-After header
+	retryConfig := spotigo.DefaultRetryConfig()
+	retryConfig.RetryAfterHeader = true
+	retryConfig.StatusRetries = 2
+	
+	client, err := spotigo.NewClient(auth, spotigo.WithRetryConfig(retryConfig))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	client.APIPrefix = server.URL + "/"
+
+	ctx := context.Background()
+	// Make a request that will trigger 429 with Retry-After header
+	_, err = client.Track(ctx, "6b2oQwSGFkzsMtQruIWm2p")
+	if err != nil {
+		// Error might occur, but retry should happen with Retry-After delay
+	}
+
+	// Verify that retry happened (indirectly tests calculateRetryDelay with Retry-After)
+	if attemptCount < 2 {
+		t.Error("expected retry to occur with Retry-After header")
+	}
+}

@@ -284,3 +284,27 @@ func WaitForContext(ctx context.Context, timeout time.Duration) error {
 		return fmt.Errorf("timeout after %v", timeout)
 	}
 }
+
+// MockLogger is a mock logger for testing that captures log calls
+type MockLogger struct {
+	DebugCalls []string
+	InfoCalls  []string
+	WarnCalls  []string
+	ErrorCalls []string
+}
+
+func (m *MockLogger) Debug(format string, v ...interface{}) {
+	m.DebugCalls = append(m.DebugCalls, fmt.Sprintf(format, v...))
+}
+
+func (m *MockLogger) Info(format string, v ...interface{}) {
+	m.InfoCalls = append(m.InfoCalls, fmt.Sprintf(format, v...))
+}
+
+func (m *MockLogger) Warn(format string, v ...interface{}) {
+	m.WarnCalls = append(m.WarnCalls, fmt.Sprintf(format, v...))
+}
+
+func (m *MockLogger) Error(format string, v ...interface{}) {
+	m.ErrorCalls = append(m.ErrorCalls, fmt.Sprintf(format, v...))
+}
