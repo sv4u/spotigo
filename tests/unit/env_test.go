@@ -14,7 +14,7 @@ func TestLoadEnvFile(t *testing.T) {
 	
 	// Create a minimal go.mod file to simulate project root
 	goModPath := filepath.Join(tmpDir, "go.mod")
-	goModContent := "module test\n\ngo 1.24\n"
+	goModContent := "module test\n\ngo 1.23\n"
 	if err := os.WriteFile(goModPath, []byte(goModContent), 0644); err != nil {
 		t.Fatalf("failed to create go.mod file: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestLoadEnvFileWithQuotedValues(t *testing.T) {
 
 	// Create a minimal go.mod file to simulate project root
 	goModPath := filepath.Join(tmpDir, "go.mod")
-	goModContent := "module test\n\ngo 1.24\n"
+	goModContent := "module test\n\ngo 1.23\n"
 	if err := os.WriteFile(goModPath, []byte(goModContent), 0644); err != nil {
 		t.Fatalf("failed to create go.mod file: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestEnvironmentVariablesTakePrecedence(t *testing.T) {
 
 	// Create a minimal go.mod file to simulate project root
 	goModPath := filepath.Join(tmpDir, "go.mod")
-	goModContent := "module test\n\ngo 1.24\n"
+	goModContent := "module test\n\ngo 1.23\n"
 	if err := os.WriteFile(goModPath, []byte(goModContent), 0644); err != nil {
 		t.Fatalf("failed to create go.mod file: %v", err)
 	}
