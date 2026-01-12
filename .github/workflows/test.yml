@@ -75,9 +75,13 @@ jobs:
           retention-days: 7
 
   coverage:
-    needs: [unit-tests, integration-tests]
     runs-on: ubuntu-latest
-    if: always() && (needs.unit-tests.result == 'success' || needs.integration-tests.result == 'success')
+    if: inputs.run-integration-tests
+    env:
+      SPOTIGO_CLIENT_ID: ${{ secrets.SPOTIGO_CLIENT_ID }}
+      SPOTIGO_CLIENT_SECRET: ${{ secrets.SPOTIGO_CLIENT_SECRET }}
+      SPOTIGO_REDIRECT_URI: ${{ secrets.SPOTIGO_REDIRECT_URI }}
+      SPOTIGO_CLIENT_USERNAME: ${{ secrets.SPOTIGO_CLIENT_USERNAME }}
     permissions:
       contents: read
       pull-requests: write
@@ -86,22 +90,26 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ inputs.go-version }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: coverage-unit-${{ inputs.go-version }}
-          path: .
-      - uses: actions/download-artifact@v4
-        with:
-          name: coverage-integration-${{ inputs.go-version }}
-          path: .
-      - name: Install gocovmerge
-        run: go install github.com/wadey/gocovmerge@latest
-      - name: Merge coverage reports
+          cache-dependency-path: go.sum
+          cache: true
+      - name: Check for credentials
+        id: check-creds
         run: |
-          if [ -f coverage-integration.out ] && [ -s coverage-integration.out ]; then
-            gocovmerge coverage-unit.out coverage-integration.out > coverage-combined.out
+          if [ -z "$SPOTIGO_CLIENT_ID" ] || [ -z "$SPOTIGO_CLIENT_SECRET" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::Coverage job: Integration tests will be skipped due to missing credentials"
           else
-            cp coverage-unit.out coverage-combined.out
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Run all tests with coverage
+        run: |
+          if [ "${{ steps.check-creds.outputs.skip }}" == "false" ]; then
+            # Run all tests together (unit + integration) to generate complete coverage
+            go test -v -coverprofile=coverage-combined.out -covermode=atomic -coverpkg=./... ./tests/...
+          else
+            # Run only unit tests if credentials are missing
+            go test -v -coverprofile=coverage-combined.out -covermode=atomic -coverpkg=./... ./tests/unit/...
+            echo "::warning::Coverage report generated with unit tests only (integration tests skipped)"
           fi
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
